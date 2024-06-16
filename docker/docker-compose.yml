@@ -1,0 +1,35 @@
+version: "3.5"
+networks:
+  default:
+    name: abelian-l2
+services:
+  pg:
+    container_name: indexer-db
+    image: postgres:14.10
+    restart: always
+    # set shared memory limit when using docker-compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    volumes:
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./db/postgres/datadir:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=abe_user
+      - POSTGRES_PASSWORD=123456789
+      - POSTGRES_DB=abe_indexer
+    ports:
+      - 5432:5432
+  indexer:
+    container_name: indexer-server
+    image: ghcr.io/abelianl2/abe-indexer:0.1.0
+    restart: always
+    volumes:
+      - ./config:/app/config
+    ports:
+      - 9090:9090
+      - 9091:9091
+    command:
+      - /app/abe-indexer
+      - start
+      - --home
+      - /app/config
