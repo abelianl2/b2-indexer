@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/b2network/b2-indexer/internal/config"
+	"github.com/b2network/b2-indexer/config"
 	"github.com/b2network/b2-indexer/internal/model"
 	"github.com/b2network/b2-indexer/internal/types"
 	logger "github.com/b2network/b2-indexer/pkg/log"
@@ -132,41 +132,4 @@ func NewDB(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(cfg.DatabaseMaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.DatabaseConnMaxLifetime) * time.Second)
 	return DB, nil
-}
-
-func NewHTTPContext(httpCfg *config.HTTPConfig, bitcoinCfg *config.BitcoinConfig) *model.Context {
-	return &model.Context{
-		HTTPConfig:    httpCfg,
-		BitcoinConfig: bitcoinCfg,
-	}
-}
-
-func HTTPConfigsPreRunHandler(cmd *cobra.Command, home string) error {
-	cfg, err := config.LoadConfig(home)
-	if err != nil {
-		return err
-	}
-	if home != "" {
-		cfg.RootDir = home
-	}
-
-	httpCfg, err := config.LoadHTTPConfig(home)
-	if err != nil {
-		return err
-	}
-
-	bitcoinCfg, err := config.LoadBitcoinConfig(home)
-	if err != nil {
-		return err
-	}
-	db, err := NewDB(cfg)
-	if err != nil {
-		return err
-	}
-
-	// set db to context
-	ctx := context.WithValue(cmd.Context(), types.DBContextKey, db)
-	cmd.SetContext(ctx)
-	serverCtx := NewHTTPContext(httpCfg, bitcoinCfg)
-	return SetCmdServerContext(cmd, serverCtx)
 }

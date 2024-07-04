@@ -1,39 +1,42 @@
 package aa
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
+	"io"
+	"net/http"
 
 	"github.com/b2network/b2-indexer/pkg/log"
-	"github.com/b2network/b2-indexer/pkg/rpc"
 	"github.com/tidwall/gjson"
 )
 
 var AddressNotFoundErrCode = "1001"
 
 type Response struct {
-	Code    string
-	Message string
-	Data    struct {
-		Pubkey string
-	}
+	Code      string
+	Message   string
+	AAAddress string
 }
 
 func GetPubKey(api, txId, btcFromAddress string, btcFromNetwork string) (*Response, error) {
-	if !strings.HasPrefix(txId, "0x") {
-		txId = fmt.Sprintf("0x%v", txId)
+	uri := fmt.Sprintf("%v/api/bridge/hash?hash=%v", api, txId)
+
+	res, err := http.Get(uri) //nolint
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("StatusCode: %d", res.StatusCode)
 	}
 
-	uri := fmt.Sprintf("%v/api/bridge/hash?hash=%v", api, txId)
-	res, err := rpc.HTTPGet(uri)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Infof("get pubkey response:%v", string(res))
+	log.Infof("Get Pubkey response:%v", string(body))
 
-	root := gjson.ParseBytes(res)
+	root := gjson.ParseBytes(body)
 
 	code := root.Get("code").Int()
 	msg := root.Get("message").String()
@@ -51,14 +54,6 @@ func GetPubKey(api, txId, btcFromAddress string, btcFromNetwork string) (*Respon
 		return nil, fmt.Errorf("not found L2 address for btcAddres:%v", btcFromAddress)
 	}
 
-	btcResp := Response{Code: fmt.Sprintf("%v", code), Message: msg, Data: struct{ Pubkey string }{Pubkey: pubKey}}
-
-	err = json.Unmarshal(res, &btcResp)
-	if err != nil {
-		return nil, err
-	}
-
+	btcResp := Response{Code: fmt.Sprintf("%v", code), Message: msg, AAAddress: pubKey}
 	return &btcResp, nil
-
-	//return &Response{Code: fmt.Sprintf("%v", 0), Message: "0k", Data: struct{ Pubkey string }{Pubkey: "0x002E73CaaBD414eeaFE0fe3ecA18F4c7D9069207"}}, nil
 }

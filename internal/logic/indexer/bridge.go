@@ -13,11 +13,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/b2network/b2-indexer/internal/config"
+	config2 "github.com/b2network/b2-indexer/config"
 	b2types "github.com/b2network/b2-indexer/internal/types"
 	"github.com/b2network/b2-indexer/pkg/aa"
 	"github.com/b2network/b2-indexer/pkg/log"
-	"github.com/b2network/b2-indexer/pkg/particle"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -26,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/tidwall/gjson"
 )
 
 var (
@@ -47,9 +47,7 @@ type Bridge struct {
 	BaseGasPriceMultiple int64
 	B2ExplorerURL        string
 	logger               log.Logger
-	// particle aa
-	particle *particle.Particle
-	network  string
+	network              string
 	// eoa transfer switch
 	//enableEoaTransfer bool
 	// aa server
@@ -66,7 +64,7 @@ type B2ExplorerStatus struct {
 var txLock sync.Mutex
 
 // NewBridge new bridge
-func NewBridge(bridgeCfg config.BridgeConfig, abiFileDir string, log log.Logger, network string) (*Bridge, error) {
+func NewBridge(bridgeCfg config2.BridgeConfig, abiFileDir string, log log.Logger, network string) (*Bridge, error) {
 	rpcURL, err := url.ParseRequestURI(bridgeCfg.EthRPCURL)
 	if err != nil {
 		return nil, err
@@ -77,7 +75,7 @@ func NewBridge(bridgeCfg config.BridgeConfig, abiFileDir string, log log.Logger,
 	abiFile, err := os.ReadFile(path.Join(abiFileDir, bridgeCfg.ABI))
 	if err != nil {
 		// load default abi
-		ABI = config.DefaultDepositAbi
+		ABI = config2.DefaultDepositAbi
 	} else {
 		ABI = string(abiFile)
 	}
@@ -109,7 +107,6 @@ func NewBridge(bridgeCfg config.BridgeConfig, abiFileDir string, log log.Logger,
 		EthPrivKey:      privateKey,
 		ABI:             ABI,
 		logger:          log,
-		particle:        nil,
 		network:         network,
 		//enableEoaTransfer:    bridgeCfg.EnableEoaTransfer,
 		AAPubKeyAPI:          bridgeCfg.AAB2PI,
@@ -146,7 +143,20 @@ func (b *Bridge) Deposit(
 	//todo test case
 	//toAddress := "0xdac17f958d2ee523a2206206994597c13d831ec7"
 
-	data, err := b.ABIPack(b.ABI, "depositV2", common.HexToHash(hash), common.HexToAddress(toAddress), new(big.Int).SetInt64(amount))
+	list := gjson.Parse(tos).Array()
+	var lockupPeriod uint64
+	if len(list) > 0 {
+		lockupPeriod = list[0].Get("Memo.lockupPeriod").Uint()
+		//rewardRatio = list[0].Get("Memo.rewardRatio").Uint()
+	}
+
+	mintNum := new(big.Int).SetInt64(amount)
+	powerOfTen := new(big.Int).SetInt64(1e11)
+	mintNum = new(big.Int).Mul(mintNum, powerOfTen)
+
+	//log.Infof("amount:%v,mint:%v,rant:%v", amount, mintNum.String(), powerOfTen.String())
+
+	data, err := b.ABIPack(b.ABI, "mintWAbel", common.HexToAddress(toAddress), mintNum, new(big.Int).SetUint64(lockupPeriod))
 	if err != nil {
 		return nil, nil, toAddress, "", fmt.Errorf("abi pack err:%w", err)
 	}
@@ -438,7 +448,7 @@ func (b *Bridge) ABIPack(abiData string, method string, args ...interface{}) ([]
 func (b *Bridge) BitcoinAddressToEthAddress(hash string, bitcoinAddress b2types.BitcoinFrom) (string, error) {
 	pubKeyResp, err := aa.GetPubKey(b.AAPubKeyAPI, hash, bitcoinAddress.Address, b.network)
 	if err != nil {
-		b.logger.Errorw("get pub key:", "pubKeyResp", pubKeyResp, "address", bitcoinAddress.Address)
+		b.logger.Errorw("Get AAAddress:", "error", err.Error())
 		return "", err
 	}
 	//if pubkeyResp.Code != "0" {
@@ -461,7 +471,7 @@ func (b *Bridge) BitcoinAddressToEthAddress(hash string, bitcoinAddress b2types.
 	//b.logger.Infow("AAGetBTCAccount", "result", aaBtcAccount.Result[0])
 	//return aaBtcAccount.Result[0].SmartAccountAddress, nil
 
-	return pubKeyResp.Data.Pubkey, nil
+	return pubKeyResp.AAAddress, nil
 }
 
 // WaitMined wait tx mined
@@ -506,10 +516,6 @@ func (b *Bridge) TransactionByHash(hash string) (*types.Transaction, bool, error
 		return nil, false, err
 	}
 	return tx, isPending, nil
-}
-
-func (b *Bridge) EnableEoaTransfer() bool {
-	return false
 }
 
 func (b *Bridge) FromAddress() string {

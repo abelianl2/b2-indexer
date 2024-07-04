@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 
-	"github.com/b2network/b2-indexer/internal/config"
+	"github.com/b2network/b2-indexer/config"
 	"github.com/b2network/b2-indexer/internal/logic/indexer"
 	"github.com/b2network/b2-indexer/internal/model"
 	"github.com/b2network/b2-indexer/internal/types"
@@ -29,13 +28,6 @@ func HandleIndexCmd(ctx *model.Context, cmd *cobra.Command) (err error) {
 			return err
 		}
 	}
-
-	//if bitcoinCfg.Eps.EnableEps {
-	//	err = runEpsService(ctx, cmd)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
 
 	//if bitcoinCfg.Bridge.EnableRollupListener {
 	//	err = runRollupListenerService(ctx, cmd)
@@ -100,7 +92,7 @@ func runIndexerService(ctx *model.Context, cmd *cobra.Command, context osContext
 	return nil
 }
 
-func startBridgeProvider(ctx *model.Context, bitcoinCfg *config.BitcoinConfig, context osContext.Context, bidxer types.BITCOINTxIndexer, cmd *cobra.Command) error {
+func startBridgeProvider(ctx *model.Context, bitcoinCfg *config.BitcoinConfig, context osContext.Context, bidxer types.BitcoinTxIndexer, cmd *cobra.Command) error {
 	home := ctx.Config.RootDir
 	//bitcoinParam := config.ChainParams(bitcoinCfg.NetworkName)
 	db, err := GetDBContextFromCmd(cmd)
@@ -109,7 +101,7 @@ func startBridgeProvider(ctx *model.Context, bitcoinCfg *config.BitcoinConfig, c
 		return err
 	}
 	bridgeLogger := newLogger(ctx, "[bridge-deposit]")
-	bridge, err := indexer.NewBridge(bitcoinCfg.Bridge, path.Join(home, "config"), bridgeLogger, bitcoinCfg.NetworkName)
+	bridge, err := indexer.NewBridge(bitcoinCfg.Bridge, home, bridgeLogger, bitcoinCfg.NetworkName)
 	if err != nil {
 		logger.Errorw("failed to create bitcoin bridge", "error", err.Error())
 		return err
@@ -140,7 +132,7 @@ func startBridgeProvider(ctx *model.Context, bitcoinCfg *config.BitcoinConfig, c
 	return nil
 }
 
-func startIndexProvider(bidxer types.BITCOINTxIndexer, bidxLogger logger.Logger, cmd *cobra.Command) error {
+func startIndexProvider(bidxer types.BitcoinTxIndexer, bidxLogger logger.Logger, cmd *cobra.Command) error {
 
 	//bitcoinParam := config.ChainParams(bitcoinCfg.NetworkName)
 	//bidxLogger := newLogger(ctx, "[bitcoin-indexer]")

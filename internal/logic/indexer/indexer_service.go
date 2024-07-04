@@ -40,18 +40,13 @@ const (
 // IndexerService indexes transactions for json-rpc service.
 type IndexerService struct {
 	service.BaseService
-	txIdxr types.BITCOINTxIndexer
+	txIdxr types.BitcoinTxIndexer
 	db     *gorm.DB
 	log    log.Logger
 }
 
 // NewIndexerService returns a new service instance.
-func NewIndexerService(
-	txIdxr types.BITCOINTxIndexer,
-	// bridge types.BITCOINBridge,
-	db *gorm.DB,
-	logger log.Logger,
-) *IndexerService {
+func NewIndexerService(txIdxr types.BitcoinTxIndexer, db *gorm.DB, logger log.Logger) *IndexerService {
 	is := &IndexerService{txIdxr: txIdxr, db: db, log: logger}
 	is.BaseService = *service.NewBaseService(nil, ServiceName, is)
 	return is
@@ -68,14 +63,6 @@ func (bis *IndexerService) CheckDb() error {
 
 	if !bis.db.Migrator().HasTable(&model.BtcIndex{}) {
 		err := bis.db.AutoMigrate(&model.BtcIndex{})
-		if err != nil {
-			bis.log.Errorw("bitcoin indexer create table", "error", err.Error())
-			return err
-		}
-	}
-
-	if !bis.db.Migrator().HasTable(&model.Sinohope{}) {
-		err := bis.db.AutoMigrate(&model.Sinohope{})
 		if err != nil {
 			bis.log.Errorw("bitcoin indexer create table", "error", err.Error())
 			return err
